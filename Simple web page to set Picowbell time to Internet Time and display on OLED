@@ -1,0 +1,176 @@
+# Simple web page to set Picowbell time to Internet Time and display on OLED.
+# Joe Pardue 1/4/25
+
+import wifi
+import socketpool
+import secrets
+import time
+import adafruit_ntp
+import rtc
+from adafruit_ssd1306 import SSD1306_I2C
+import board
+import digitalio
+import microcontroller
+
+# Reset and initialize Wi-Fi stack
+def reset_wifi():
+    print("Resetting Wi-Fi stack...")
+    wifi.radio.enabled = False
+    time.sleep(1)  # Allow the stack to reset
+    wifi.radio.enabled = True
+    time.sleep(1)  # Allow initialization
+
+# Connect to Wi-Fi
+def connect_wifi():
+    reset_wifi()
+    print("Connecting to Wi-Fi...")
+    for attempt in range(3):  # Retry up to 3 times
+        try:
+            wifi.radio.connect(secrets.secrets["ssid"], secrets.secrets["password"])
+            print("Connected to Wi-Fi!")
+            print(f"Server running at http://{wifi.radio.ipv4_address}:8080")
+            return True
+        except Exception as e:
+            print(f"Error connecting to Wi-Fi (Attempt {attempt + 1}): {e}")
+            time.sleep(2)  # Wait before retrying
+    print("Failed to connect to Wi-Fi after 3 attempts. Rebooting...")
+    time.sleep(2)
+    microcontroller.reset()  # Reboot the device
+    return False
+
+# Initialize peripherals
+def setup():
+    # Initialize OLED
+    global display
+    i2c = board.STEMMA_I2C()
+    display = SSD1306_I2C(128, 64, i2c, addr=0x3D)
+    display.fill(0)
+    display.show()
+
+    # Initialize Button 1 for setting RTC to Internet time
+    global button1
+    button1 = digitalio.DigitalInOut(board.GP6)
+    button1.direction = digitalio.Direction.INPUT
+    button1.pull = digitalio.Pull.DOWN
+
+    # Create an NTP client
+    global pool, ntp, rtc_clock
+    pool = socketpool.SocketPool(wifi.radio)
+    ntp = adafruit_ntp.NTP(pool, server="pool.ntp.org", tz_offset=0)
+    rtc_clock = rtc.RTC()
+
+# Format the time for display
+def format_time(time_struct):
+    return "{:04}-{:02}-{:02} {:02}:{:02}:{:02}".format(
+        time_struct.tm_year,
+        time_struct.tm_mon,
+        time_struct.tm_mday,
+        time_struct.tm_hour,
+        time_struct.tm_min,
+        time_struct.tm_sec,
+    )
+
+# Update the OLED display
+def update_display():
+    display.fill(0)
+    try:
+        internet_time = format_time(ntp.datetime)
+    except Exception:
+        internet_time = "Internet time unavailable."
+
+    picowbell_time = format_time(rtc_clock.datetime)
+    display.text("Internet:", 0, 0, 1)
+    display.text(internet_time, 0, 8, 1)
+    display.text("Picowbell:", 0, 24, 1)
+    display.text(picowbell_time, 0, 32, 1)
+    display.show()
+
+# Main program
+def main():
+    setup()
+
+    # Connect to Wi-Fi
+    if not connect_wifi():
+        return  # Exit if Wi-Fi connection fails
+
+    # Sync the RTC with the Internet time initially
+    try:
+        rtc_clock.datetime = ntp.datetime
+        print("Time synchronized with NTP server.")
+    except Exception as e:
+        print(f"Error synchronizing time: {e}")
+
+    # Create a socket for the web server
+    try:
+        server = pool.socket()
+        server.bind(("0.0.0.0", 8080))  # Use port 8080
+        server.listen(1)
+        print("Server is listening...")
+    except OSError as e:
+        print(f"Socket error: {e}")
+        print("Rebooting Pico W...")
+        time.sleep(2)
+        microcontroller.reset()
+
+    while True:
+        # Check if Button 1 is pressed to update RTC
+        if button1.value:
+            try:
+                rtc_clock.datetime = ntp.datetime
+                print("Picowbell time updated to Internet time.")
+            except Exception as e:
+                print(f"Error updating time: {e}")
+            time.sleep(0.2)  # Debounce delay
+
+        # Update the OLED display
+        update_display()
+
+        # Handle incoming HTTP requests
+        print("Waiting for a connection...")
+        client, addr = server.accept()
+        print("Connection from", addr)
+
+        try:
+            buffer = bytearray(1024)
+            bytes_received = client.recv_into(buffer)
+            request = buffer[:bytes_received].decode("utf-8")
+            print("Request:", request)
+
+            # Check if the button was clicked in the browser
+            button_pressed = "GET /set_picowbell_time" in request
+            if button_pressed:
+                try:
+                    rtc_clock.datetime = ntp.datetime
+                    print("Picowbell time updated to Internet time via web.")
+                except Exception as e:
+                    print(f"Error updating time via web: {e}")
+
+            # Prepare the HTTP response
+            internet_time = format_time(ntp.datetime) if ntp.datetime else "Internet time not available."
+            picowbell_time = format_time(rtc_clock.datetime)
+            response = f"""\
+HTTP/1.1 200 OK
+
+<!DOCTYPE html>
+<html>
+    <head><title>Pico W Server</title></head>
+    <body>
+        <h1>Hello, World!</h1>
+        <form action="/set_picowbell_time" method="get">
+            <button type="submit">Set Picowbell Time to Internet Time</button>
+        </form>
+        <p>Internet Time: {internet_time}</p>
+        <p>Picowbell Time: {picowbell_time}</p>
+    </body>
+</html>
+"""
+            client.send(response.encode("utf-8"))
+        except Exception as e:
+            print("Error handling client:", e)
+        finally:
+            client.close()
+
+# Run the main program
+if __name__ == "__main__":
+    main()
+
