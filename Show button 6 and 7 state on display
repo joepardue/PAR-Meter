@@ -1,0 +1,54 @@
+# Show button 6 and 7 state on display
+# Joe Pardue 1/4/25
+
+import board
+import digitalio
+import time
+from adafruit_ssd1306 import SSD1306_I2C
+
+# Define the GPIO pins
+BUTTON_PIN_6 = board.GP6  # GPIO 6 for button 1
+BUTTON_PIN_7 = board.GP7  # GPIO 7 for button 2
+LED_PIN = board.LED  # Onboard LED
+
+# Set up buttons as inputs with pull-down resistors
+button_6 = digitalio.DigitalInOut(BUTTON_PIN_6)
+button_6.direction = digitalio.Direction.INPUT
+button_6.pull = digitalio.Pull.DOWN
+
+button_7 = digitalio.DigitalInOut(BUTTON_PIN_7)
+button_7.direction = digitalio.Direction.INPUT
+button_7.pull = digitalio.Pull.DOWN
+
+# Set up the onboard LED as an output
+led = digitalio.DigitalInOut(LED_PIN)
+led.direction = digitalio.Direction.OUTPUT
+
+# Initialize I2C and OLED display
+i2c = board.STEMMA_I2C()  # Use the STEMMA I2C interface
+display = SSD1306_I2C(128, 64, i2c, addr=0x3D)
+
+# Clear the display initially
+display.fill(0)
+display.show()
+
+# Function to update the display with the button states
+def update_display(state_6, state_7):
+    display.fill(0)  # Clear display
+    display.text(f"Button 6: {'Pressed' if state_6 else 'Released'}", 0, 0, 1)
+    display.text(f"Button 7: {'Pressed' if state_7 else 'Released'}", 0, 16, 1)
+    display.show()  # Update the display
+
+# Main loop
+while True:
+    button_6_state = button_6.value  # Read button 6 state
+    button_7_state = button_7.value  # Read button 7 state
+
+    # Control LED with button 6 state
+    led.value = button_6_state
+
+    # Update display with the states of both buttons
+    update_display(button_6_state, button_7_state)
+
+    time.sleep(0.01)  # Small delay for debounce
+
