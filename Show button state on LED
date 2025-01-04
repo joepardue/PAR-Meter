@@ -1,0 +1,29 @@
+# Show button state on LED
+# Joe Pardue 1/4/25
+
+import board
+import digitalio
+import time
+
+# Define the GPIO pins
+BUTTON_PIN = board.GP6  # GPIO 6 for the button
+LED_PIN = board.LED  # Onboard LED
+
+# Set up the button as an input with a pull-down resistor
+button = digitalio.DigitalInOut(BUTTON_PIN)
+button.direction = digitalio.Direction.INPUT
+button.pull = digitalio.Pull.DOWN
+
+# Set up the onboard LED as an output
+led = digitalio.DigitalInOut(LED_PIN)
+led.direction = digitalio.Direction.OUTPUT
+
+# Main loop
+while True:
+    if button.value:  # Button is pressed
+        led.value = True  # Turn the LED on
+    else:  # Button is not pressed
+        led.value = False  # Turn the LED off
+
+    time.sleep(0.01)  # Small delay to debounce the button
+
