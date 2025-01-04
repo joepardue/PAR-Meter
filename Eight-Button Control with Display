@@ -1,0 +1,69 @@
+# Eight-Button Control with Display
+# Joe Pardue 1/4/25
+
+import board
+import digitalio
+import time
+from adafruit_ssd1306 import SSD1306_I2C
+
+# Define GPIO pins for buttons
+BUTTON_PINS = [
+    board.GP6,  # Button 1
+    board.GP7,  # Button 2
+    board.GP8,  # Button 3
+    board.GP9,  # Button 4
+    board.GP10, # Button 5
+    board.GP11, # Button 6
+    board.GP12, # Button 7
+    board.GP13, # Button 8
+]
+LED_PIN = board.LED  # Onboard LED
+
+# Set up buttons as inputs with pull-down resistors
+buttons = []
+for pin in BUTTON_PINS:
+    button = digitalio.DigitalInOut(pin)
+    button.direction = digitalio.Direction.INPUT
+    button.pull = digitalio.Pull.DOWN
+    buttons.append(button)
+
+# Set up the onboard LED as an output
+led = digitalio.DigitalInOut(LED_PIN)
+led.direction = digitalio.Direction.OUTPUT
+
+# Initialize I2C and OLED display
+i2c = board.STEMMA_I2C()  # Use the STEMMA I2C interface
+display = SSD1306_I2C(128, 64, i2c, addr=0x3D)
+
+# Clear the display initially
+display.fill(0)
+display.show()
+
+# Store previous button states to minimize display updates
+prev_states = [None] * len(BUTTON_PINS)
+
+# Function to update the display only when necessary
+def update_display(states):
+    global prev_states
+    if states != prev_states:  # Update only if states have changed
+        display.fill(0)  # Clear display
+        for i, state in enumerate(states):
+            y_offset = i * 8  # Move to the next line
+            display.text(f"Btn {i+1}: {'Pressed' if state else 'Released'}", 0, y_offset, 1)
+        display.show()  # Update the display
+        prev_states = states[:]  # Save the current states
+
+# Main loop
+while True:
+    # Read all button states
+    button_states = [button.value for button in buttons]
+
+    # Control LED with button 6 state (index 5 in the list)
+    led.value = button_states[5]
+
+    # Update display only if states have changed
+    update_display(button_states)
+
+    # Minimal delay to reduce CPU load without impacting responsiveness
+    time.sleep(0.005)  # 5 ms delay
+
