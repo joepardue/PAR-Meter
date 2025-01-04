@@ -1,0 +1,82 @@
+# Potentiometer Calibration with Buttons
+# Joe Pardue 1/4/25
+
+import board
+import analogio
+import digitalio
+import time
+from adafruit_ssd1306 import SSD1306_I2C
+
+# Define the ADC pin for the potentiometer
+POT_PIN = board.A0  # GPIO 26 (ADC0)
+
+# Define GPIO pins for the buttons
+BUTTON1_PIN = board.GP6  # Button 1: Set Max
+BUTTON2_PIN = board.GP7  # Button 2: Set Min
+
+# Initialize the potentiometer as an analog input
+potentiometer = analogio.AnalogIn(POT_PIN)
+
+# Initialize the buttons
+button1 = digitalio.DigitalInOut(BUTTON1_PIN)
+button1.direction = digitalio.Direction.INPUT
+button1.pull = digitalio.Pull.DOWN
+
+button2 = digitalio.DigitalInOut(BUTTON2_PIN)
+button2.direction = digitalio.Direction.INPUT
+button2.pull = digitalio.Pull.DOWN
+
+# Initialize I2C and OLED display
+i2c = board.STEMMA_I2C()  # Use the STEMMA I2C interface
+display = SSD1306_I2C(128, 64, i2c, addr=0x3D)
+
+# Clear the display initially
+display.fill(0)
+display.show()
+
+# Calibration values
+calibration_min = 0
+calibration_max = 65535
+is_calibrated = False
+
+# Function to read and map the potentiometer value
+def read_potentiometer():
+    raw_value = potentiometer.value
+    if is_calibrated:
+        # Map the raw value to 0–1024 based on calibration
+        return int((raw_value - calibration_min) * 1024 / (calibration_max - calibration_min))
+    else:
+        return raw_value // 64  # Default scaled value
+
+# Function to display values and calibration status
+def update_display(pot_value):
+    display.fill(0)  # Clear display
+    if is_calibrated:
+        display.text(f"Pot = {pot_value:04}", 0, 0, 1)
+    else:
+        display.text("Calibrating...", 0, 0, 1)
+        display.text("Press Btn1: Max", 0, 16, 1)
+        display.text("Press Btn2: Min", 0, 32, 1)
+    display.show()  # Update the display
+
+# Main loop
+while True:
+    # Read the potentiometer value
+    pot_value = read_potentiometer()
+
+    # Check button presses
+    if button1.value:  # Button 1 pressed
+        calibration_max = potentiometer.value
+        is_calibrated = calibration_min < calibration_max
+        time.sleep(0.2)  # Debounce delay
+
+    if button2.value:  # Button 2 pressed
+        calibration_min = potentiometer.value
+        is_calibrated = calibration_min < calibration_max
+        time.sleep(0.2)  # Debounce delay
+
+    # Update display with current value
+    update_display(pot_value)
+
+    time.sleep(0.1)  # Update every 100 ms
+
