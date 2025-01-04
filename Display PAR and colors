@@ -1,0 +1,59 @@
+# Display PAR and colors
+# Joe Pardue 1/4/25
+
+import time
+import board
+import busio
+from adafruit_ssd1306 import SSD1306_I2C
+
+# Initialize I2C using board.STEMMA_I2C()
+i2c = board.STEMMA_I2C()
+
+# Define the OLED display parameters
+OLED_WIDTH = 128
+OLED_HEIGHT = 64
+
+# Create an SSD1306 I2C instance for the display
+display = SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c, addr=0x3d)
+
+# Clear the display initially
+display.fill(0)
+display.show()
+
+# Dummy data for testing
+PAR_value = 1234
+color_values = {
+    "Violet": 1234,
+    "Blue": 567,
+    "Cyan": 2345,
+    "Green": 123,
+    "Yellow": 6789,
+    "Orange": 456,
+    "Red": 890,
+}
+
+# Ordered list of colors from smallest to largest frequency
+color_order = ["Violet", "Blue", "Cyan", "Green", "Yellow", "Orange", "Red"]
+
+# Function to display PAR and color values
+def display_par_and_colors():
+    display.fill(0)  # Clear display
+
+    # Display PAR value
+    display.text(f"PAR: {PAR_value:4}", 0, 0, 1)
+
+    # Display color values in the correct order
+    y_offset = 8  # Start below the first line
+    for color in color_order:
+        value = color_values.get(color, 0)  # Get the value or default to 0
+        display.text(f"{color[:6]}: {value:4}", 0, y_offset, 1)
+        y_offset += 8  # Move to the next line
+
+    display.show()  # Update the display
+
+# Call the function to display data
+display_par_and_colors()
+
+# Keep the program running to view the display
+time.sleep(10)
+
