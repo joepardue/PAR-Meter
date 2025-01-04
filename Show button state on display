@@ -1,0 +1,45 @@
+# Show button state on display
+# Joe Pardue 1/4/25
+
+import board
+import digitalio
+import time
+from adafruit_ssd1306 import SSD1306_I2C
+
+# Define the GPIO pins
+BUTTON_PIN = board.GP6  # GPIO 6 for the button
+LED_PIN = board.LED  # Onboard LED
+
+# Set up the button as an input with a pull-down resistor
+button = digitalio.DigitalInOut(BUTTON_PIN)
+button.direction = digitalio.Direction.INPUT
+button.pull = digitalio.Pull.DOWN
+
+# Set up the onboard LED as an output
+led = digitalio.DigitalInOut(LED_PIN)
+led.direction = digitalio.Direction.OUTPUT
+
+# Initialize I2C and OLED display
+i2c = board.STEMMA_I2C()  # Use the STEMMA I2C interface
+display = SSD1306_I2C(128, 64, i2c, addr=0x3D)
+
+# Clear the display initially
+display.fill(0)
+display.show()
+
+# Function to update the display with the button state
+def update_display(state):
+    display.fill(0)  # Clear display
+    if state:  # Button is pressed
+        display.text("Pressed", 0, 0, 1)
+    else:  # Button is released
+        display.text("Released", 0, 0, 1)
+    display.show()  # Update the display
+
+# Main loop
+while True:
+    button_state = button.value  # Read button state
+    led.value = button_state  # Control LED based on button state
+    update_display(button_state)  # Update display with button state
+    time.sleep(0.01)  # Small delay for debounce
+
